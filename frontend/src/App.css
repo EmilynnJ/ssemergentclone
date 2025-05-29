@@ -1,38 +1,99 @@
+@import url('https://fonts.googleapis.com/css2?family=Alex+Brush&family=Playfair+Display:wght@400;700&display=swap');
+
 .App {
-    text-align: center;
+  text-align: center;
 }
 
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+/* Custom font classes */
+.font-alex-brush {
+  font-family: 'Alex Brush', cursive;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+.font-playfair {
+  font-family: 'Playfair Display', serif;
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+/* Override Tailwind to ensure our fonts work */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Alex Brush', cursive;
 }
 
-.App-link {
-    color: #61dafb;
+p, span, div, button {
+  font-family: 'Playfair Display', serif;
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 105, 180, 0.5);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 105, 180, 0.7);
+}
+
+/* Loading animations */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Mystical glow effects */
+.mystical-glow {
+  box-shadow: 0 0 20px rgba(255, 105, 180, 0.3);
+}
+
+.mystical-glow:hover {
+  box-shadow: 0 0 30px rgba(255, 105, 180, 0.5);
+}
+
+/* Card hover effects */
+.reader-card {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.reader-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(255, 105, 180, 0.2);
+}
+
+/* Status indicators */
+.status-online {
+  background: linear-gradient(135deg, #10B981, #059669);
+}
+
+.status-busy {
+  background: linear-gradient(135deg, #F59E0B, #D97706);
+}
+
+.status-offline {
+  background: linear-gradient(135deg, #EF4444, #DC2626);
+}
+
+/* Responsive design improvements */
+@media (max-width: 768px) {
+  .font-alex-brush {
+    font-size: 2.5rem;
+  }
+  
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
 }
