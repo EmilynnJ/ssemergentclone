@@ -472,6 +472,171 @@ async def get_reader_user_id(reader_id: str) -> Optional[str]:
         result = await conn.fetchval("SELECT user_id FROM readers WHERE id = $1", reader_id)
         return result
 
+# Session billing functions
+async def start_session_billing(session_id: str, session_data: dict):
+    """Start billing for an active session"""
+    active_sessions[session_id] = {
+        "session_id": session_id,
+        "client_id": session_data['client_id'],
+        "reader_id": session_data['reader_id'],
+        "rate_per_minute": session_data['rate_per_minute'],
+        "start_time": datetime.now(),
+        "last_bill_time": datetime.now(),
+        "total_billed": 0.0
+    }
+    
+    # Start background billing task
+    asyncio.create_task(bill_session_minutes(session_id))
+    logger.info(f"Started billing for session {session_id}")
+
+async def end_session_billing(session_id: str, session_data: dict) -> dict:
+    """End billing for a session and finalize charges"""
+    if session_id in active_sessions:
+        billing_data = active_sessions[session_id]
+        end_time = datetime.now()
+        
+        # Calculate final minutes and amount
+        total_seconds = (end_time - billing_data['start_time']).total_seconds()
+        total_minutes = total_seconds / 60.0
+        total_amount = total_minutes * billing_data['rate_per_minute']
+        
+        # Apply any remaining partial minute billing
+        await bill_partial_minute(session_id, end_time)
+        
+        async with db_pool.acquire() as conn:
+            # Update session with final amounts
+            await conn.execute("""
+                UPDATE reading_sessions 
+                SET status = 'completed', end_time = $1, total_minutes = $2, 
+                    total_amount = $3, updated_at = NOW()
+                WHERE id = $4
+            """, end_time, total_minutes, total_amount, session_id)
+            
+            # Process revenue split (70% to reader, 30% to platform)
+            reader_amount = total_amount * 0.7
+            
+            # Add earnings to reader (implement reader earnings table if needed)
+            # For now, just log the transaction
+            logger.info(f"Session {session_id} completed: ${total_amount:.2f} total, ${reader_amount:.2f} to reader")
+            
+            # Get updated session data
+            updated_session = await conn.fetchrow("""
+                SELECT * FROM reading_sessions WHERE id = $1
+            """, session_id)
+        
+        # Clean up active session
+        del active_sessions[session_id]
+        
+        return dict(updated_session)
+    
+    # If session wasn't actively billed, just mark as completed
+    async with db_pool.acquire() as conn:
+        await conn.execute("""
+            UPDATE reading_sessions 
+            SET status = 'completed', end_time = NOW(), updated_at = NOW()
+            WHERE id = $1
+        """, session_id)
+        
+        updated_session = await conn.fetchrow("""
+            SELECT * FROM reading_sessions WHERE id = $1
+        """, session_id)
+        
+        return dict(updated_session)
+
+async def bill_session_minutes(session_id: str):
+    """Background task to bill session per minute"""
+    while session_id in active_sessions:
+        try:
+            await asyncio.sleep(60)  # Wait 1 minute
+            
+            if session_id not in active_sessions:
+                break
+                
+            billing_data = active_sessions[session_id]
+            current_time = datetime.now()
+            
+            # Bill for the minute
+            await bill_partial_minute(session_id, current_time)
+            
+        except Exception as e:
+            logger.error(f"Error in billing task for session {session_id}: {str(e)}")
+            break
+
+async def bill_partial_minute(session_id: str, current_time: datetime):
+    """Bill for a partial or full minute"""
+    if session_id not in active_sessions:
+        return
+        
+    billing_data = active_sessions[session_id]
+    rate_per_minute = billing_data['rate_per_minute']
+    
+    async with db_pool.acquire() as conn:
+        # Check client balance
+        client = await conn.fetchrow("""
+            SELECT balance FROM clients 
+            WHERE id = $1
+        """, billing_data['client_id'])
+        
+        if not client or client['balance'] < rate_per_minute:
+            # Insufficient funds - end session
+            logger.warning(f"Insufficient funds for session {session_id}, ending session")
+            
+            # End the session due to insufficient funds
+            await conn.execute("""
+                UPDATE reading_sessions 
+                SET status = 'completed', end_time = $1, updated_at = NOW()
+                WHERE id = $2
+            """, current_time, session_id)
+            
+            # Notify both parties
+            session_info = await conn.fetchrow("""
+                SELECT rs.*, c.user_id as client_user_id, r.user_id as reader_user_id
+                FROM reading_sessions rs
+                JOIN clients c ON rs.client_id = c.id
+                JOIN readers r ON rs.reader_id = r.id
+                WHERE rs.id = $1
+            """, session_id)
+            
+            if session_info:
+                await notify_session_update(session_info['client_user_id'], {
+                    "type": "session_ended",
+                    "reason": "insufficient_funds",
+                    "session_id": session_id
+                })
+                await notify_session_update(session_info['reader_user_id'], {
+                    "type": "session_ended", 
+                    "reason": "insufficient_funds",
+                    "session_id": session_id
+                })
+            
+            # Remove from active sessions
+            if session_id in active_sessions:
+                del active_sessions[session_id]
+            return
+        
+        # Deduct the minute charge
+        await conn.execute("""
+            UPDATE clients 
+            SET balance = balance - $1, updated_at = NOW()
+            WHERE id = $2
+        """, rate_per_minute, billing_data['client_id'])
+        
+        # Update billing data
+        billing_data['total_billed'] += rate_per_minute
+        billing_data['last_bill_time'] = current_time
+        
+        logger.info(f"Billed ${rate_per_minute:.2f} for session {session_id}")
+
+async def notify_session_update(user_id: str, message: dict):
+    """Notify a user about session updates"""
+    if user_id in websocket_connections:
+        try:
+            await websocket_connections[user_id].send_text(json.dumps(message))
+        except:
+            # Remove stale connection
+            if user_id in websocket_connections:
+                del websocket_connections[user_id]
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001)
