@@ -419,6 +419,203 @@ async def request_reading_session(
         
         return dict(session)
 
+@app.post("/api/session/action")
+async def session_action(
+    action_data: SessionAction,
+    user_data: dict = Depends(verify_clerk_token)
+):
+    """Handle session actions: accept, reject, start, end"""
+    user_id = user_data["user_id"]
+    
+    async with db_pool.acquire() as conn:
+        # Get session info
+        session = await conn.fetchrow("""
+            SELECT rs.*, 
+                   c.user_id as client_user_id, r.user_id as reader_user_id,
+                   u1.first_name as client_first_name, u1.last_name as client_last_name,
+                   u2.first_name as reader_first_name, u2.last_name as reader_last_name
+            FROM reading_sessions rs
+            JOIN clients c ON rs.client_id = c.id
+            JOIN readers r ON rs.reader_id = r.id
+            JOIN users u1 ON c.user_id = u1.id
+            JOIN users u2 ON r.user_id = u2.id
+            WHERE rs.id = $1
+        """, action_data.session_id)
+        
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        session_dict = dict(session)
+        
+        if action_data.action == "accept":
+            # Only reader can accept
+            if user_id != session_dict['reader_user_id']:
+                raise HTTPException(status_code=403, detail="Only the reader can accept the session")
+            
+            if session_dict['status'] != 'pending':
+                raise HTTPException(status_code=400, detail="Session is not pending")
+            
+            # Update session status to active and set start time
+            await conn.execute("""
+                UPDATE reading_sessions 
+                SET status = 'active', start_time = NOW(), updated_at = NOW()
+                WHERE id = $1
+            """, action_data.session_id)
+            
+            # Start billing
+            await start_session_billing(action_data.session_id, session_dict)
+            
+            # Create WebRTC room
+            await signaling_server.create_room(session_dict['room_id'])
+            
+            # Notify client
+            await notify_session_update(session_dict['client_user_id'], {
+                "type": "session_accepted",
+                "session_id": action_data.session_id,
+                "room_id": session_dict['room_id']
+            })
+            
+        elif action_data.action == "reject":
+            # Only reader can reject
+            if user_id != session_dict['reader_user_id']:
+                raise HTTPException(status_code=403, detail="Only the reader can reject the session")
+                
+            if session_dict['status'] != 'pending':
+                raise HTTPException(status_code=400, detail="Session is not pending")
+            
+            await conn.execute("""
+                UPDATE reading_sessions 
+                SET status = 'cancelled', updated_at = NOW()
+                WHERE id = $1
+            """, action_data.session_id)
+            
+            # Notify client
+            await notify_session_update(session_dict['client_user_id'], {
+                "type": "session_rejected",
+                "session_id": action_data.session_id
+            })
+            
+        elif action_data.action == "end":
+            # Either party can end the session
+            if user_id not in [session_dict['client_user_id'], session_dict['reader_user_id']]:
+                raise HTTPException(status_code=403, detail="Unauthorized to end this session")
+                
+            if session_dict['status'] != 'active':
+                raise HTTPException(status_code=400, detail="Session is not active")
+            
+            # End billing and calculate final amount
+            final_session = await end_session_billing(action_data.session_id, session_dict)
+            
+            # Notify both parties
+            other_user = session_dict['reader_user_id'] if user_id == session_dict['client_user_id'] else session_dict['client_user_id']
+            await notify_session_update(other_user, {
+                "type": "session_ended",
+                "session_id": action_data.session_id,
+                "total_amount": final_session['total_amount'],
+                "total_minutes": final_session['total_minutes']
+            })
+            
+            return final_session
+        
+        return {"status": "success", "action": action_data.action}
+
+@app.post("/api/payment/add-funds")
+async def add_funds(
+    funds_request: AddFundsRequest,
+    user_data: dict = Depends(verify_clerk_token)
+):
+    """Add funds to client account using Stripe"""
+    user_id = user_data["user_id"]
+    
+    try:
+        # Create Stripe PaymentIntent
+        payment_intent = stripe.PaymentIntent.create(
+            amount=int(funds_request.amount * 100),  # Convert to cents
+            currency='usd',
+            metadata={
+                'user_id': user_id,
+                'type': 'add_funds'
+            }
+        )
+        
+        return {
+            "client_secret": payment_intent.client_secret,
+            "amount": funds_request.amount
+        }
+    except Exception as e:
+        logger.error(f"Error creating payment intent: {str(e)}")
+        raise HTTPException(status_code=400, detail="Failed to create payment intent")
+
+@app.post("/api/payment/confirm")
+async def confirm_payment(
+    background_tasks: BackgroundTasks,
+    payment_intent_id: str,
+    user_data: dict = Depends(verify_clerk_token)
+):
+    """Confirm payment and add funds to account"""
+    user_id = user_data["user_id"]
+    
+    try:
+        # Retrieve payment intent from Stripe
+        payment_intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+        
+        if payment_intent.status == 'succeeded':
+            amount = payment_intent.amount / 100  # Convert from cents
+            
+            async with db_pool.acquire() as conn:
+                # Add funds to client account
+                await conn.execute("""
+                    UPDATE clients 
+                    SET balance = balance + $1, updated_at = NOW()
+                    WHERE user_id = $2
+                """, amount, user_id)
+                
+                # Get updated balance
+                new_balance = await conn.fetchval("""
+                    SELECT balance FROM clients WHERE user_id = $1
+                """, user_id)
+                
+                return {
+                    "status": "success",
+                    "amount_added": amount,
+                    "new_balance": float(new_balance)
+                }
+        else:
+            raise HTTPException(status_code=400, detail="Payment not successful")
+            
+    except Exception as e:
+        logger.error(f"Error confirming payment: {str(e)}")
+        raise HTTPException(status_code=400, detail="Failed to confirm payment")
+
+@app.get("/api/webrtc/config")
+async def get_webrtc_config():
+    """Get WebRTC configuration including TURN servers"""
+    return get_rtc_configuration()
+
+# WebRTC WebSocket endpoint
+@app.websocket("/api/webrtc/{room_id}")
+async def webrtc_signaling(websocket: WebSocket, room_id: str, user_id: str):
+    """WebRTC signaling endpoint"""
+    await websocket.accept()
+    
+    try:
+        # Join the signaling room
+        await signaling_server.join_room(room_id, user_id, websocket)
+        
+        while True:
+            # Receive signaling messages
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            
+            # Handle signaling message
+            await signaling_server.handle_signaling_message(user_id, message)
+            
+    except WebSocketDisconnect:
+        await signaling_server.leave_room(user_id)
+    except Exception as e:
+        logger.error(f"WebRTC signaling error: {str(e)}")
+        await signaling_server.leave_room(user_id)
+
 # WebSocket for real-time notifications
 @app.websocket("/api/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
