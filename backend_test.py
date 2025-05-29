@@ -136,7 +136,8 @@ async def test_websocket_connection():
         
         # Set a timeout for the connection attempt
         try:
-            async with websockets.connect(ws_url, timeout=5) as websocket:
+            # Create connection without timeout parameter
+            async with websockets.connect(ws_url) as websocket:
                 print("WebSocket connection established")
                 
                 # Send a ping message
