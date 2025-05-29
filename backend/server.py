@@ -5,7 +5,8 @@ import json
 import asyncio
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
-from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect
+from decimal import Decimal
+from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
@@ -15,8 +16,16 @@ import requests
 from contextlib import asynccontextmanager
 import websockets
 import uuid
+import logging
+
+# Import WebRTC signaling
+from webrtc_signaling import signaling_server, get_rtc_configuration
 
 load_dotenv()
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Environment variables
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -32,6 +41,9 @@ db_pool = None
 
 # WebSocket connections for real-time features
 websocket_connections: Dict[str, WebSocket] = {}
+
+# Session billing tracking
+active_sessions: Dict[str, dict] = {}
 
 # Pydantic models
 class User(BaseModel):
@@ -87,6 +99,18 @@ class ReaderStatus(BaseModel):
 class SessionRequest(BaseModel):
     reader_id: str
     session_type: str  # chat, phone, video
+
+class SessionAction(BaseModel):
+    session_id: str
+    action: str  # accept, reject, start, end
+
+class AddFundsRequest(BaseModel):
+    amount: float  # Amount in dollars
+
+class WebRTCMessage(BaseModel):
+    type: str
+    target: Optional[str] = None
+    data: Optional[dict] = None
 
 # Database initialization
 async def init_db():
