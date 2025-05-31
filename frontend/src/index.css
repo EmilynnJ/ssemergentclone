@@ -1,14 +1,35 @@
+@import url('https://fonts.googleapis.com/css2?family=Alex+Brush&family=Playfair+Display:wght@400;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
-        "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans",
-        "Helvetica Neue", sans-serif;
+    font-family: 'Playfair Display', serif; /* Default to Playfair Display */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Apply base gradient from Tailwind config - these are example color names */
+    /* Ensure these 'soul-*' colors are defined in tailwind.config.js */
+    @apply bg-gradient-to-br from-soul-purple via-soul-black to-soul-pink text-soul-gray-100;
+    background-size: 200% 200%; /* For gradient animation */
+    animation: gradientShift 15s ease infinite; /* Apply animation */
+}
+
+/* Keyframes for body background animation - also defined in tailwind.config.js for utility class use */
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Utility class for mystical glow on hover - can be applied to buttons or links */
+.mystical-glow-hover:hover {
+  /* Example using soul-pink, adjust color and intensity as needed */
+  box-shadow: 0 0 15px #F72585, 0 0 25px #F72585, 0 0 35px #F72585;
+  /* For text glow, text-shadow is better:
+  text-shadow: 0 0 8px #F72585, 0 0 10px #F72585;
+  */
 }
 
 code {
