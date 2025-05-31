@@ -25,7 +25,7 @@ class WebRTCService {
     this.sessionType = sessionType;
 
     // Get WebRTC configuration from backend
-    const response = await fetch(`${import.meta.env.REACT_APP_BACKEND_URL}/api/webrtc/config`);
+    const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/webrtc/config`);
     const config = await response.json();
 
     // Create peer connection
