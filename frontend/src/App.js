@@ -13,9 +13,9 @@ import "./App.css";
 
 // Import components
 import { QuickAddFundsButton } from './components/PaymentUI';
-import { SessionRequestModal, ScheduledReadingModal } from './components/SessionManager';
+import { SessionRequestModal } from './components/SessionManager';
 import SessionManager from './components/SessionManager';
-import { ScheduledSessionsList } from './components/ScheduledReadings';
+import { ScheduledReadingModal, ScheduledSessionsList } from './components/ScheduledReadings';
 import { MessagingInterface, StartConversationModal } from './components/Messaging';
 import { LiveStreamsList, LiveStreamViewer, ReaderStreamDashboard } from './components/LiveStreaming';
 import ForumInterface from './components/Forum';
