@@ -251,8 +251,12 @@ class ReadingSession(BaseModel):
     client_id: str
     reader_id: str
     session_type: str  # chat, phone, video
+    billing_type: str = "per_minute"  # per_minute, fixed_duration
     status: str  # pending, active, completed, cancelled
-    rate_per_minute: float
+    rate_per_minute: Optional[float] = None
+    fixed_price: Optional[float] = None
+    duration_minutes: Optional[int] = None
+    scheduled_time: Optional[datetime] = None
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     total_minutes: float = 0.0
@@ -266,10 +270,23 @@ class ReaderStatus(BaseModel):
     chat_rate_per_minute: Optional[float] = None
     phone_rate_per_minute: Optional[float] = None
     video_rate_per_minute: Optional[float] = None
+    # Fixed duration pricing
+    chat_15min_price: Optional[float] = None
+    chat_30min_price: Optional[float] = None
+    chat_60min_price: Optional[float] = None
+    phone_15min_price: Optional[float] = None
+    phone_30min_price: Optional[float] = None
+    phone_60min_price: Optional[float] = None
+    video_15min_price: Optional[float] = None
+    video_30min_price: Optional[float] = None
+    video_60min_price: Optional[float] = None
 
 class SessionRequest(BaseModel):
     reader_id: str
     session_type: str  # chat, phone, video
+    billing_type: str = "per_minute"  # per_minute, fixed_duration
+    duration_minutes: Optional[int] = None  # for fixed_duration
+    scheduled_time: Optional[datetime] = None  # for scheduled sessions
 
 class SessionAction(BaseModel):
     session_id: str
@@ -282,6 +299,32 @@ class WebRTCMessage(BaseModel):
     type: str
     target: Optional[str] = None
     data: Optional[dict] = None
+
+class MessageRequest(BaseModel):
+    recipient_id: str
+    message_text: str
+    is_paid: bool = False
+    price: Optional[float] = None
+
+class LiveStreamRequest(BaseModel):
+    title: str
+    description: Optional[str] = None
+    scheduled_time: Optional[datetime] = None
+
+class VirtualGiftRequest(BaseModel):
+    stream_id: str
+    gift_type: str
+    gift_value: float
+    message: Optional[str] = None
+
+class ForumPostRequest(BaseModel):
+    title: str
+    content: str
+    category: str = "general"
+
+class ForumReplyRequest(BaseModel):
+    post_id: str
+    content: str
 
 # Database initialization
 async def init_db():
