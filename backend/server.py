@@ -1159,6 +1159,40 @@ async def notify_session_update(user_id: str, message: dict):
             if user_id in websocket_connections:
                 del websocket_connections[user_id]
 
+async def notify_message_received(message_data: dict):
+    """Notify a user about a new message"""
+    recipient_id = message_data['recipient_id']
+    
+    if recipient_id in websocket_connections:
+        try:
+            await websocket_connections[recipient_id].send_text(json.dumps({
+                "type": "message_received",
+                "data": message_data
+            }))
+        except:
+            # Remove stale connection
+            if recipient_id in websocket_connections:
+                del websocket_connections[recipient_id]
+
+async def broadcast_gift_to_stream(stream_id: str, gift_data: dict):
+    """Broadcast gift to all stream viewers"""
+    # In a real implementation, this would broadcast to all connected stream viewers
+    # For now, we'll store the gift data and it can be retrieved via API
+    message = {
+        "type": "virtual_gift",
+        "stream_id": stream_id,
+        "data": gift_data
+    }
+    
+    # Broadcast to all connected users (simplified implementation)
+    for user_id, websocket in websocket_connections.items():
+        try:
+            await websocket.send_text(json.dumps(message))
+        except:
+            # Remove stale connections
+            if user_id in websocket_connections:
+                del websocket_connections[user_id]
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001)
