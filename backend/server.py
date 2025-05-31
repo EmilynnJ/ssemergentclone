@@ -673,25 +673,58 @@ async def request_reading_session(
         if not reader:
             raise HTTPException(status_code=404, detail="Reader not available")
         
-        # Get rate for session type
-        rate_field = f"{session_request.session_type}_rate_per_minute"
-        rate = reader[rate_field]
-        
-        if rate <= 0:
-            raise HTTPException(status_code=400, detail=f"Reader does not offer {session_request.session_type} sessions")
-        
-        # Check client balance
-        if client['balance'] < rate:
-            raise HTTPException(status_code=400, detail="Insufficient balance")
-        
-        # Create session
-        room_id = str(uuid.uuid4())
-        session_id = await conn.fetchval("""
-            INSERT INTO reading_sessions 
-            (client_id, reader_id, session_type, rate_per_minute, room_id, status)
-            VALUES ($1, $2, $3, $4, $5, 'pending')
-            RETURNING id
-        """, client['id'], session_request.reader_id, session_request.session_type, rate, room_id)
+        # Determine pricing based on billing type
+        if session_request.billing_type == "fixed_duration":
+            if not session_request.duration_minutes or session_request.duration_minutes not in [15, 30, 60]:
+                raise HTTPException(status_code=400, detail="Invalid duration. Must be 15, 30, or 60 minutes")
+            
+            # Get fixed price
+            price_field = f"{session_request.session_type}_{session_request.duration_minutes}min_price"
+            fixed_price = reader.get(price_field, 0)
+            
+            if fixed_price <= 0:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Reader does not offer {session_request.duration_minutes}-minute {session_request.session_type} sessions"
+                )
+            
+            # Check client balance for fixed price
+            if client['balance'] < fixed_price:
+                raise HTTPException(status_code=400, detail="Insufficient balance")
+            
+            # Create session with fixed pricing
+            room_id = str(uuid.uuid4())
+            session_id = await conn.fetchval("""
+                INSERT INTO reading_sessions 
+                (client_id, reader_id, session_type, billing_type, fixed_price, 
+                 duration_minutes, scheduled_time, room_id, status)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
+                RETURNING id
+            """, client['id'], session_request.reader_id, session_request.session_type, 
+                session_request.billing_type, fixed_price, session_request.duration_minutes,
+                session_request.scheduled_time, room_id)
+        else:
+            # Per-minute billing (existing logic)
+            rate_field = f"{session_request.session_type}_rate_per_minute"
+            rate = reader[rate_field]
+            
+            if rate <= 0:
+                raise HTTPException(status_code=400, detail=f"Reader does not offer {session_request.session_type} sessions")
+            
+            # Check client balance
+            if client['balance'] < rate:
+                raise HTTPException(status_code=400, detail="Insufficient balance")
+            
+            # Create session
+            room_id = str(uuid.uuid4())
+            session_id = await conn.fetchval("""
+                INSERT INTO reading_sessions 
+                (client_id, reader_id, session_type, billing_type, rate_per_minute, 
+                 scheduled_time, room_id, status)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+                RETURNING id
+            """, client['id'], session_request.reader_id, session_request.session_type,
+                session_request.billing_type, rate, session_request.scheduled_time, room_id)
         
         # Get complete session info
         session = await conn.fetchrow("""
