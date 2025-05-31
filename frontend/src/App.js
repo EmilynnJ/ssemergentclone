@@ -201,7 +201,7 @@ function HomePage({ availableReaders, userProfile, isSignedIn, onRequestSession,
           <p className="text-gray-300 text-sm mb-4">Connect with our gifted readers</p>
           <div className="text-green-400 font-bold">{availableReaders.length} readers online</div>
           <button
-            onClick={() => onAuthAction('reading') && window.location.hash !== '#readings' ? setCurrentPage('readings') : null}
+            onClick={() => onAuthAction('reading') && window.location.hash !== '#readings' ? onPageChange('readings') : null}
             className="mt-4 w-full bg-pink-600 hover:bg-pink-700 text-white py-2 px-4 rounded-lg font-playfair transition-colors"
           >
             Browse Readers
