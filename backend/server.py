@@ -338,13 +338,91 @@ async def init_db():
                 client_id VARCHAR REFERENCES clients(id),
                 reader_id VARCHAR REFERENCES readers(id),
                 session_type VARCHAR NOT NULL,
+                billing_type VARCHAR DEFAULT 'per_minute', -- per_minute, fixed_duration
                 status VARCHAR DEFAULT 'pending',
                 rate_per_minute DECIMAL(10,2),
+                fixed_price DECIMAL(10,2),
+                duration_minutes INTEGER,
+                scheduled_time TIMESTAMP,
                 start_time TIMESTAMP,
                 end_time TIMESTAMP,
                 total_minutes DECIMAL(10,2) DEFAULT 0.00,
                 total_amount DECIMAL(10,2) DEFAULT 0.00,
                 room_id VARCHAR UNIQUE,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        ''')
+        
+        # Messages table for premium messaging
+        await conn.execute('''
+            CREATE TABLE IF NOT EXISTS messages (
+                id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::text,
+                sender_id VARCHAR REFERENCES users(id),
+                recipient_id VARCHAR REFERENCES users(id),
+                message_text TEXT NOT NULL,
+                is_paid BOOLEAN DEFAULT FALSE,
+                price DECIMAL(10,2) DEFAULT 0.00,
+                paid_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        ''')
+        
+        # Live streams table
+        await conn.execute('''
+            CREATE TABLE IF NOT EXISTS live_streams (
+                id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::text,
+                reader_id VARCHAR REFERENCES readers(id),
+                title VARCHAR NOT NULL,
+                description TEXT,
+                status VARCHAR DEFAULT 'scheduled', -- scheduled, live, ended
+                start_time TIMESTAMP,
+                end_time TIMESTAMP,
+                viewer_count INTEGER DEFAULT 0,
+                total_gifts DECIMAL(10,2) DEFAULT 0.00,
+                stream_key VARCHAR UNIQUE,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        ''')
+        
+        # Virtual gifts table
+        await conn.execute('''
+            CREATE TABLE IF NOT EXISTS virtual_gifts (
+                id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::text,
+                stream_id VARCHAR REFERENCES live_streams(id),
+                sender_id VARCHAR REFERENCES users(id),
+                gift_type VARCHAR NOT NULL,
+                gift_value DECIMAL(10,2) NOT NULL,
+                message TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        ''')
+        
+        # Forum posts table
+        await conn.execute('''
+            CREATE TABLE IF NOT EXISTS forum_posts (
+                id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::text,
+                user_id VARCHAR REFERENCES users(id),
+                title VARCHAR NOT NULL,
+                content TEXT NOT NULL,
+                category VARCHAR DEFAULT 'general',
+                reply_count INTEGER DEFAULT 0,
+                last_reply_at TIMESTAMP,
+                is_pinned BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        ''')
+        
+        # Forum replies table
+        await conn.execute('''
+            CREATE TABLE IF NOT EXISTS forum_replies (
+                id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::text,
+                post_id VARCHAR REFERENCES forum_posts(id) ON DELETE CASCADE,
+                user_id VARCHAR REFERENCES users(id),
+                content TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT NOW(),
                 updated_at TIMESTAMP DEFAULT NOW()
             )
