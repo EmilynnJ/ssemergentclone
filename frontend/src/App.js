@@ -11,6 +11,11 @@ import {
 import axios from "axios";
 import "./App.css";
 
+// Import components
+import { QuickAddFundsButton } from './components/PaymentUI';
+import { SessionRequestModal } from './components/SessionManager';
+import SessionManager from './components/SessionManager';
+
 // API Configuration
 const API_BASE_URL = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
 
@@ -77,11 +82,17 @@ function Dashboard() {
   const [readerProfile, setReaderProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedReader, setSelectedReader] = useState(null);
+  const [showSessionRequest, setShowSessionRequest] = useState(false);
 
   useEffect(() => {
     if (user) {
       loadUserData();
       loadAvailableReaders();
+      
+      // Refresh readers every 30 seconds
+      const interval = setInterval(loadAvailableReaders, 30000);
+      return () => clearInterval(interval);
     }
   }, [user]);
 
@@ -117,6 +128,15 @@ function Dashboard() {
     } catch (err) {
       console.error('Error loading available readers:', err);
     }
+  };
+
+  const handleRequestSession = (reader) => {
+    setSelectedReader(reader);
+    setShowSessionRequest(true);
+  };
+
+  const handleBalanceUpdate = (newBalance) => {
+    setUserProfile(prev => ({ ...prev, balance: newBalance }));
   };
 
   if (loading) {
@@ -155,10 +175,23 @@ function Dashboard() {
           <ClientDashboard 
             availableReaders={availableReaders}
             userProfile={userProfile}
+            onRequestSession={handleRequestSession}
+            onBalanceUpdate={handleBalanceUpdate}
             api={createAuthenticatedAxios(getToken)}
           />
         )}
       </main>
+
+      {/* Session Request Modal */}
+      <SessionRequestModal
+        isOpen={showSessionRequest}
+        onClose={() => setShowSessionRequest(false)}
+        reader={selectedReader}
+        api={createAuthenticatedAxios(getToken)}
+      />
+
+      {/* Session Manager for real-time notifications and calls */}
+      <SessionManager api={createAuthenticatedAxios(getToken)} />
     </div>
   );
 }
@@ -228,7 +261,7 @@ function ReaderDashboard({ readerProfile, userProfile, onProfileUpdate, api }) {
       {/* Status Control */}
       <div className="bg-black/40 backdrop-blur-sm rounded-lg p-6 border border-pink-500/30">
         <h3 className="text-xl font-playfair text-white mb-4">Availability Status</h3>
-        <div className="flex space-x-4">
+        <div className="flex flex-wrap gap-4 mb-4">
           {['offline', 'online', 'busy'].map((statusOption) => (
             <button
               key={statusOption}
@@ -244,7 +277,7 @@ function ReaderDashboard({ readerProfile, userProfile, onProfileUpdate, api }) {
             </button>
           ))}
         </div>
-        <div className="mt-2">
+        <div className="flex items-center">
           <span className={`inline-block w-3 h-3 rounded-full mr-2 ${
             status === 'online' ? 'bg-green-500' : 
             status === 'busy' ? 'bg-yellow-500' : 'bg-red-500'
@@ -264,14 +297,18 @@ function ReaderDashboard({ readerProfile, userProfile, onProfileUpdate, api }) {
               <label className="block text-white font-playfair mb-2 capitalize">
                 {type} Rate ($/min)
               </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={rates[type]}
-                onChange={(e) => setRates({...rates, [type]: parseFloat(e.target.value) || 0})}
-                className="w-full px-4 py-2 bg-gray-800 text-white rounded-lg border border-gray-600 focus:border-pink-500 focus:outline-none"
-              />
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">$</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="50"
+                  value={rates[type]}
+                  onChange={(e) => setRates({...rates, [type]: parseFloat(e.target.value) || 0})}
+                  className="w-full pl-8 pr-4 py-2 bg-gray-800 text-white rounded-lg border border-gray-600 focus:border-pink-500 focus:outline-none"
+                />
+              </div>
             </div>
           ))}
         </div>
@@ -284,47 +321,50 @@ function ReaderDashboard({ readerProfile, userProfile, onProfileUpdate, api }) {
         </button>
       </div>
 
-      {/* Session History Placeholder */}
+      {/* Earnings Summary Placeholder */}
       <div className="bg-black/40 backdrop-blur-sm rounded-lg p-6 border border-pink-500/30">
-        <h3 className="text-xl font-playfair text-white mb-4">Recent Sessions</h3>
-        <p className="text-gray-400">No recent sessions found.</p>
+        <h3 className="text-xl font-playfair text-white mb-4">Today's Earnings</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="text-center">
+            <div className="text-2xl font-alex-brush text-pink-400">$0.00</div>
+            <div className="text-sm text-gray-400">Total</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-alex-brush text-green-400">0</div>
+            <div className="text-sm text-gray-400">Sessions</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-alex-brush text-blue-400">0 min</div>
+            <div className="text-sm text-gray-400">Total Time</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-alex-brush text-purple-400">$0.00</div>
+            <div className="text-sm text-gray-400">Pending</div>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-function ClientDashboard({ availableReaders, userProfile, api }) {
-  const [selectedReader, setSelectedReader] = useState(null);
-  const [sessionType, setSessionType] = useState('chat');
-  const [requesting, setRequesting] = useState(false);
-
-  const requestSession = async (readerId, type) => {
-    setRequesting(true);
-    try {
-      const response = await api.post('/api/session/request', {
-        reader_id: readerId,
-        session_type: type
-      });
-      alert('Session request sent! Waiting for reader to accept...');
-      console.log('Session created:', response.data);
-    } catch (err) {
-      console.error('Error requesting session:', err);
-      alert(err.response?.data?.detail || 'Failed to request session');
-    } finally {
-      setRequesting(false);
-    }
-  };
-
+function ClientDashboard({ availableReaders, userProfile, onRequestSession, onBalanceUpdate, api }) {
   return (
     <div className="space-y-8">
       <h2 className="text-3xl font-alex-brush text-pink-400 text-center">
         Available Readers
       </h2>
 
+      {/* User Balance */}
+      <QuickAddFundsButton
+        currentBalance={userProfile?.balance}
+        onBalanceUpdate={onBalanceUpdate}
+        api={api}
+      />
+
       {/* Available Readers */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {availableReaders.map((reader) => (
-          <div key={reader.id} className="bg-black/40 backdrop-blur-sm rounded-lg p-6 border border-pink-500/30">
+          <div key={reader.id} className="bg-black/40 backdrop-blur-sm rounded-lg p-6 border border-pink-500/30 reader-card">
             <div className="text-center mb-4">
               <h3 className="text-xl font-playfair text-white">
                 {reader.first_name} {reader.last_name}
@@ -337,59 +377,46 @@ function ClientDashboard({ availableReaders, userProfile, api }) {
 
             {/* Rates */}
             <div className="space-y-2 mb-4">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-300">Chat:</span>
-                <span className="text-white">${reader.chat_rate_per_minute}/min</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-300">Phone:</span>
-                <span className="text-white">${reader.phone_rate_per_minute}/min</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-300">Video:</span>
-                <span className="text-white">${reader.video_rate_per_minute}/min</span>
-              </div>
+              {reader.chat_rate_per_minute > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-300">Chat:</span>
+                  <span className="text-white">${reader.chat_rate_per_minute}/min</span>
+                </div>
+              )}
+              {reader.phone_rate_per_minute > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-300">Phone:</span>
+                  <span className="text-white">${reader.phone_rate_per_minute}/min</span>
+                </div>
+              )}
+              {reader.video_rate_per_minute > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-300">Video:</span>
+                  <span className="text-white">${reader.video_rate_per_minute}/min</span>
+                </div>
+              )}
             </div>
 
-            {/* Action Buttons */}
-            <div className="space-y-2">
-              {['chat', 'phone', 'video'].map((type) => {
-                const rate = reader[`${type}_rate_per_minute`];
-                return rate > 0 ? (
-                  <button
-                    key={type}
-                    onClick={() => requestSession(reader.id, type)}
-                    disabled={requesting}
-                    className="w-full bg-pink-600 hover:bg-pink-700 text-white py-2 px-4 rounded-lg font-playfair transition-colors disabled:opacity-50 capitalize"
-                  >
-                    Start {type} Reading (${rate}/min)
-                  </button>
-                ) : null;
-              })}
-            </div>
+            {/* Action Button */}
+            <button
+              onClick={() => onRequestSession(reader)}
+              className="w-full bg-pink-600 hover:bg-pink-700 text-white py-2 px-4 rounded-lg font-playfair transition-colors mystical-glow"
+            >
+              Request Reading
+            </button>
           </div>
         ))}
       </div>
 
       {availableReaders.length === 0 && (
         <div className="text-center text-gray-400 py-8">
+          <div className="w-24 h-24 mx-auto mb-4 bg-gradient-to-br from-pink-500/20 to-purple-600/20 rounded-full flex items-center justify-center">
+            <span className="text-4xl">🌙</span>
+          </div>
           <p className="text-xl font-playfair">No readers are currently available.</p>
-          <p>Please check back later.</p>
+          <p>Our gifted psychics will return soon. Please check back later.</p>
         </div>
       )}
-
-      {/* User Balance */}
-      <div className="bg-black/40 backdrop-blur-sm rounded-lg p-6 border border-pink-500/30">
-        <h3 className="text-xl font-playfair text-white mb-4">Account Balance</h3>
-        <div className="flex justify-between items-center">
-          <span className="text-2xl font-playfair text-pink-400">
-            ${userProfile?.balance || '0.00'}
-          </span>
-          <button className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-playfair transition-colors">
-            Add Funds
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
