@@ -756,14 +756,226 @@ function ClientDashboard({ availableReaders, userProfile, onRequestSession, onBa
 }
 
 function App() {
+  const { user, isSignedIn } = useUser();
+  const [currentPage, setCurrentPage] = useState('home');
+  const [userProfile, setUserProfile] = useState(null);
+  const [availableReaders, setAvailableReaders] = useState([]);
+  const [readerProfile, setReaderProfile] = useState(null);
+  const [loading, setLoading] = useState(false);
+  
+  // Modal states
+  const [selectedReader, setSelectedReader] = useState(null);
+  const [showSessionRequest, setShowSessionRequest] = useState(false);
+  const [showScheduledReading, setShowScheduledReading] = useState(false);
+  const [showStartConversation, setShowStartConversation] = useState(false);
+  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
+
+  useEffect(() => {
+    loadAvailableReaders();
+    
+    // Load user data only if signed in
+    if (isSignedIn) {
+      loadUserData();
+    }
+    
+    // Refresh readers every 30 seconds
+    const interval = setInterval(loadAvailableReaders, 30000);
+    return () => clearInterval(interval);
+  }, [isSignedIn]);
+
+  const loadUserData = async () => {
+    if (!isSignedIn) return;
+    
+    setLoading(true);
+    try {
+      const api = createAuthenticatedAxios(useAuth().getToken);
+      const response = await api.get('/api/user/profile');
+      setUserProfile(response.data);
+      
+      // Try to load reader profile if user is a reader
+      if (response.data.role === 'reader') {
+        try {
+          const readerResponse = await api.get('/api/reader/profile');
+          setReaderProfile(readerResponse.data);
+        } catch (err) {
+          console.log('No reader profile found');
+        }
+      }
+    } catch (err) {
+      console.error('Error loading user data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadAvailableReaders = async () => {
+    try {
+      // This endpoint should be public
+      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/readers/available`);
+      setAvailableReaders(response.data);
+    } catch (err) {
+      console.error('Error loading available readers:', err);
+    }
+  };
+
+  const handleRequestSession = (reader, type = 'instant') => {
+    if (!isSignedIn) {
+      setShowAuthPrompt(true);
+      return;
+    }
+    
+    setSelectedReader(reader);
+    if (type === 'scheduled') {
+      setShowScheduledReading(true);
+    } else {
+      setShowSessionRequest(true);
+    }
+  };
+
+  const handleBalanceUpdate = (newBalance) => {
+    setUserProfile(prev => ({ ...prev, balance: newBalance }));
+  };
+
+  const handleAuthAction = (action) => {
+    if (!isSignedIn) {
+      setShowAuthPrompt(true);
+      return false;
+    }
+    return true;
+  };
+
+  const renderPage = () => {
+    const api = isSignedIn ? createAuthenticatedAxios(useAuth().getToken) : null;
+    
+    switch (currentPage) {
+      case 'home':
+        return (
+          <HomePage
+            availableReaders={availableReaders}
+            userProfile={userProfile}
+            isSignedIn={isSignedIn}
+            onRequestSession={handleRequestSession}
+            onBalanceUpdate={handleBalanceUpdate}
+            onAuthAction={handleAuthAction}
+            api={api}
+          />
+        );
+      
+      case 'readings':
+        return (
+          <ReadingsPage
+            availableReaders={availableReaders}
+            userProfile={userProfile}
+            isSignedIn={isSignedIn}
+            onRequestSession={handleRequestSession}
+            onBalanceUpdate={handleBalanceUpdate}
+            onAuthAction={handleAuthAction}
+            api={api}
+          />
+        );
+      
+      case 'live':
+        return isSignedIn && userProfile?.role === 'reader' ? (
+          <ReaderStreamDashboard api={api} />
+        ) : (
+          <LiveStreamsList api={api} />
+        );
+      
+      case 'messages':
+        if (!isSignedIn) {
+          return <AuthRequiredPage onSignIn={() => setShowAuthPrompt(true)} />;
+        }
+        return (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-3xl font-alex-brush text-pink-400">Messages</h2>
+              {userProfile?.role === 'client' && (
+                <button
+                  onClick={() => setShowStartConversation(true)}
+                  className="bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded-lg font-playfair transition-colors"
+                >
+                  New Conversation
+                </button>
+              )}
+            </div>
+            <MessagingInterface api={api} />
+          </div>
+        );
+      
+      case 'community':
+        return <ForumInterface api={api} />;
+      
+      case 'help':
+        return <HelpCenter />;
+      
+      case 'policies':
+        return <PoliciesPage />;
+      
+      case 'apply':
+        return <ApplyReaderPage api={api} />;
+      
+      case 'admin':
+        if (!isSignedIn || userProfile?.role !== 'admin') {
+          return <AuthRequiredPage onSignIn={() => setShowAuthPrompt(true)} />;
+        }
+        return <AdminDashboard api={api} />;
+      
+      default:
+        return <HomePage availableReaders={availableReaders} />;
+    }
+  };
+
   return (
-    <div className="App">
-      <SignedOut>
-        <WelcomeScreen />
-      </SignedOut>
-      <SignedIn>
-        <Dashboard />
-      </SignedIn>
+    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-black to-pink-900">
+      {/* Navigation */}
+      <Navigation 
+        currentPage={currentPage}
+        onPageChange={setCurrentPage}
+        userRole={userProfile?.role}
+        isSignedIn={isSignedIn}
+        user={user}
+      />
+
+      {/* Main Content */}
+      <main className="container mx-auto px-4 py-8">
+        {renderPage()}
+      </main>
+
+      {/* Auth Prompt Modal */}
+      {showAuthPrompt && (
+        <AuthPromptModal 
+          onClose={() => setShowAuthPrompt(false)}
+        />
+      )}
+
+      {/* Other Modals - only show if signed in */}
+      {isSignedIn && (
+        <>
+          <SessionRequestModal
+            isOpen={showSessionRequest}
+            onClose={() => setShowSessionRequest(false)}
+            reader={selectedReader}
+            api={createAuthenticatedAxios(useAuth().getToken)}
+          />
+
+          <ScheduledReadingModal
+            isOpen={showScheduledReading}
+            onClose={() => setShowScheduledReading(false)}
+            reader={selectedReader}
+            api={createAuthenticatedAxios(useAuth().getToken)}
+          />
+
+          <StartConversationModal
+            isOpen={showStartConversation}
+            onClose={() => setShowStartConversation(false)}
+            readers={availableReaders}
+            api={createAuthenticatedAxios(useAuth().getToken)}
+          />
+
+          {/* Session Manager for real-time notifications and calls */}
+          <SessionManager api={createAuthenticatedAxios(useAuth().getToken)} />
+        </>
+      )}
     </div>
   );
 }
