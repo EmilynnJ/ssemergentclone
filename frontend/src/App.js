@@ -22,7 +22,7 @@ import ForumInterface from './components/Forum';
 import { PoliciesPage, HelpCenter, ApplyReaderPage, AdminDashboard } from './components/AdditionalPages';
 
 // API Configuration
-const API_BASE_URL = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
+const API_BASE_URL = process.env.REACT_APP_BACKEND_URL;
 
 // Create axios instance with authentication
 const createAuthenticatedAxios = (getToken) => {
