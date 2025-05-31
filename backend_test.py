@@ -467,13 +467,12 @@ async def test_websocket_connection():
 async def test_webrtc_signaling():
     """Test WebRTC signaling WebSocket"""
     try:
-        if not TEST_ROOM_ID:
-            # Generate a test room ID
-            TEST_ROOM_ID = str(uuid.uuid4())
+        # Generate a test room ID if we don't have one
+        room_id = TEST_ROOM_ID if TEST_ROOM_ID else str(uuid.uuid4())
             
         # Use a test user ID
         user_id = "test_user_123"
-        ws_url = f"{BACKEND_URL.replace('https://', 'wss://').replace('http://', 'ws://')}/api/webrtc/{TEST_ROOM_ID}?user_id={user_id}"
+        ws_url = f"{BACKEND_URL.replace('https://', 'wss://').replace('http://', 'ws://')}/api/webrtc/{room_id}?user_id={user_id}"
         
         print(f"Connecting to WebRTC signaling at: {ws_url}")
         
