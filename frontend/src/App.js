@@ -42,7 +42,7 @@ const createAuthenticatedAxios = (getToken) => {
 };
 
 // Enhanced Navigation Component
-function Navigation({ currentPage, onPageChange, userRole }) {
+function Navigation({ currentPage, onPageChange, userRole, isSignedIn, user }) {
   const navigationItems = [
     { id: 'home', label: 'Home', icon: '🏠' },
     { id: 'readings', label: 'Readings', icon: '🔮' },
@@ -116,7 +116,27 @@ function Navigation({ currentPage, onPageChange, userRole }) {
 
           {/* User Menu */}
           <div className="flex items-center space-x-4">
-            <UserButton />
+            {isSignedIn ? (
+              <>
+                <span className="text-white font-playfair hidden md:block">
+                  Welcome, {user?.firstName || 'User'}
+                </span>
+                <UserButton />
+              </>
+            ) : (
+              <div className="flex space-x-2">
+                <SignInButton>
+                  <button className="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg font-playfair transition-colors">
+                    Sign In
+                  </button>
+                </SignInButton>
+                <SignUpButton>
+                  <button className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-playfair transition-colors">
+                    Sign Up
+                  </button>
+                </SignUpButton>
+              </div>
+            )}
           </div>
         </div>
 
@@ -141,6 +161,215 @@ function Navigation({ currentPage, onPageChange, userRole }) {
         </div>
       </div>
     </nav>
+  );
+}
+
+// HomePage Component
+function HomePage({ availableReaders, userProfile, isSignedIn, onRequestSession, onBalanceUpdate, onAuthAction, api }) {
+  return (
+    <div className="space-y-8">
+      {/* Hero Section */}
+      <div className="text-center space-y-6">
+        <div className="w-32 h-32 mx-auto bg-gradient-to-br from-pink-500 to-purple-600 rounded-full flex items-center justify-center">
+          <span className="text-6xl">🔮</span>
+        </div>
+        
+        <h1 className="text-5xl font-alex-brush text-pink-400">
+          Welcome to SoulSeer
+        </h1>
+        
+        <p className="text-xl font-playfair text-white max-w-2xl mx-auto">
+          Connect with gifted psychics for spiritual guidance through chat, phone, and video readings. 
+          Join our community of seekers and discover your path.
+        </p>
+      </div>
+
+      {/* User Balance (if signed in) */}
+      {isSignedIn && userProfile && (
+        <QuickAddFundsButton
+          currentBalance={userProfile?.balance}
+          onBalanceUpdate={onBalanceUpdate}
+          api={api}
+        />
+      )}
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-black/40 backdrop-blur-sm rounded-lg p-6 border border-pink-500/30 text-center reader-card">
+          <div className="text-4xl mb-4">🔮</div>
+          <h3 className="text-white font-playfair font-bold mb-2">Get a Reading</h3>
+          <p className="text-gray-300 text-sm mb-4">Connect with our gifted readers</p>
+          <div className="text-green-400 font-bold">{availableReaders.length} readers online</div>
+          <button
+            onClick={() => onAuthAction('reading') && window.location.hash !== '#readings' ? setCurrentPage('readings') : null}
+            className="mt-4 w-full bg-pink-600 hover:bg-pink-700 text-white py-2 px-4 rounded-lg font-playfair transition-colors"
+          >
+            Browse Readers
+          </button>
+        </div>
+        
+        <div className="bg-black/40 backdrop-blur-sm rounded-lg p-6 border border-pink-500/30 text-center reader-card">
+          <div className="text-4xl mb-4">📺</div>
+          <h3 className="text-white font-playfair font-bold mb-2">Live Streams</h3>
+          <p className="text-gray-300 text-sm mb-4">Watch live spiritual guidance</p>
+          <div className="text-pink-400 font-bold">Free to watch</div>
+          <button
+            onClick={() => window.location.hash = '#live'}
+            className="mt-4 w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg font-playfair transition-colors"
+          >
+            Watch Streams
+          </button>
+        </div>
+        
+        <div className="bg-black/40 backdrop-blur-sm rounded-lg p-6 border border-pink-500/30 text-center reader-card">
+          <div className="text-4xl mb-4">👥</div>
+          <h3 className="text-white font-playfair font-bold mb-2">Community</h3>
+          <p className="text-gray-300 text-sm mb-4">Join spiritual discussions</p>
+          <div className="text-blue-400 font-bold">Free to participate</div>
+          <button
+            onClick={() => window.location.hash = '#community'}
+            className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-playfair transition-colors"
+          >
+            Join Community
+          </button>
+        </div>
+      </div>
+
+      {/* Featured Readers */}
+      <div>
+        <h3 className="text-2xl font-alex-brush text-pink-400 mb-6 text-center">
+          Featured Readers
+        </h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {availableReaders.slice(0, 6).map((reader) => (
+            <div key={reader.id} className="bg-black/40 backdrop-blur-sm rounded-lg p-6 border border-pink-500/30 reader-card">
+              <div className="text-center mb-4">
+                <h4 className="text-xl font-playfair text-white">
+                  {reader.first_name} {reader.last_name}
+                </h4>
+                <div className="flex items-center justify-center mt-2">
+                  <span className="w-3 h-3 bg-green-500 rounded-full mr-2"></span>
+                  <span className="text-green-400 font-playfair">Online</span>
+                </div>
+              </div>
+
+              <div className="space-y-2 mb-4">
+                {reader.chat_rate_per_minute > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-300">Chat:</span>
+                    <span className="text-white">${reader.chat_rate_per_minute}/min</span>
+                  </div>
+                )}
+                {reader.phone_rate_per_minute > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-300">Phone:</span>
+                    <span className="text-white">${reader.phone_rate_per_minute}/min</span>
+                  </div>
+                )}
+                {reader.video_rate_per_minute > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-300">Video:</span>
+                    <span className="text-white">${reader.video_rate_per_minute}/min</span>
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={() => onRequestSession(reader)}
+                className="w-full bg-pink-600 hover:bg-pink-700 text-white py-2 px-4 rounded-lg font-playfair transition-colors mystical-glow"
+              >
+                {isSignedIn ? 'Connect Now' : 'Sign In to Connect'}
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {availableReaders.length === 0 && (
+          <div className="text-center text-gray-400 py-8">
+            <div className="w-24 h-24 mx-auto mb-4 bg-gradient-to-br from-pink-500/20 to-purple-600/20 rounded-full flex items-center justify-center">
+              <span className="text-4xl">🌙</span>
+            </div>
+            <p className="text-xl font-playfair">No readers are currently available.</p>
+            <p>Our gifted psychics will return soon. Please check back later.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Auth Required Page Component
+function AuthRequiredPage({ onSignIn }) {
+  return (
+    <div className="text-center py-16">
+      <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-pink-500/20 to-purple-600/20 rounded-full flex items-center justify-center">
+        <span className="text-4xl">🔒</span>
+      </div>
+      
+      <h2 className="text-3xl font-alex-brush text-pink-400 mb-4">
+        Sign In Required
+      </h2>
+      
+      <p className="text-gray-300 font-playfair mb-8 max-w-md mx-auto">
+        Please sign in to access this feature and connect with our spiritual community.
+      </p>
+      
+      <div className="space-x-4">
+        <SignInButton>
+          <button className="bg-pink-500 hover:bg-pink-600 text-white px-8 py-3 rounded-lg font-playfair transition-colors">
+            Sign In
+          </button>
+        </SignInButton>
+        <SignUpButton>
+          <button className="bg-purple-600 hover:bg-purple-700 text-white px-8 py-3 rounded-lg font-playfair transition-colors">
+            Create Account
+          </button>
+        </SignUpButton>
+      </div>
+    </div>
+  );
+}
+
+// Auth Prompt Modal Component
+function AuthPromptModal({ onClose }) {
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-black/80 backdrop-blur-sm rounded-lg p-6 border border-pink-500/30 max-w-md w-full">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-pink-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-3xl">🔮</span>
+          </div>
+          
+          <h3 className="text-xl font-alex-brush text-pink-400 mb-4">
+            Join SoulSeer
+          </h3>
+          
+          <p className="text-gray-300 font-playfair mb-6">
+            Sign in to book readings, message readers, and access all platform features.
+          </p>
+          
+          <div className="space-y-3">
+            <SignInButton>
+              <button className="w-full bg-pink-500 hover:bg-pink-600 text-white py-3 px-6 rounded-lg font-playfair transition-colors">
+                Sign In
+              </button>
+            </SignInButton>
+            <SignUpButton>
+              <button className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 px-6 rounded-lg font-playfair transition-colors">
+                Create Account
+              </button>
+            </SignUpButton>
+            <button
+              onClick={onClose}
+              className="w-full bg-gray-700 hover:bg-gray-600 text-white py-2 px-6 rounded-lg font-playfair transition-colors"
+            >
+              Continue Browsing
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
