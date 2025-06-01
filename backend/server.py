@@ -620,12 +620,37 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 # CORS middleware
+# Get CORS origins from environment variable, defaulting to frontend dev server
+# and a placeholder for the Vercel frontend URL.
+# The user will set CORS_ALLOWED_ORIGINS in Vercel environment variables.
+# Example: "http://localhost:3000,https://your-frontend-deployment.vercel.app"
+
+default_origins = [
+    "http://localhost:3000", # For local frontend development
+    "http://127.0.0.1:3000", # Another local variant
+    # Add any other known development origins if necessary
+]
+
+cors_env_origins = os.getenv("CORS_ALLOWED_ORIGINS")
+if cors_env_origins:
+    allowed_origins = [origin.strip() for origin in cors_env_origins.split(',')]
+else:
+    # In a Vercel deployment, CORS_ALLOWED_ORIGINS should ideally be set.
+    # If not set, for local development, it falls back to default_origins.
+    # For production on Vercel, if this var isn't set, it might block frontend if not covered by "*"
+    # However, the plan is to set this in Vercel explicitly.
+    # If you want to default to ["*"] in production if the env var is missing, that's an alternative.
+    # For now, sticking to defined list or specific localhost defaults.
+    allowed_origins = default_origins
+    logger.warning("CORS_ALLOWED_ORIGINS not set, defaulting to localhost development origins. Set this in Vercel for production.")
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure for production
+    allow_origins=allowed_origins, # Use the dynamically set list
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"], # Or specify methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    allow_headers=["*"], # Or specify headers: ["Authorization", "Content-Type"]
 )
 
 # Security
