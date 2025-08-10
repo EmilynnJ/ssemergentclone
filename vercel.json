@@ -1,56 +1,26 @@
+{
   "version": 2,
   "builds": [
-    {
-      "src": "backend/server.py",
-      "use": "@vercel/python",
-      "config": { "maxLambdaSize": "25mb" }
-    },
     {
       "src": "frontend/package.json",
       "use": "@vercel/static-build",
       "config": {
-        "distDir": "build"
+        "distDir": "frontend/dist"
       }
+    },
+    {
+      "src": "backend/server.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "backend/server.py"
-    },
-    {
-      "src": "/static/(.*)",
-      "headers": { "cache-control": "s-maxage=31536000,immutable" },
-      "dest": "/static/$1"
-    },
-    {
-      "src": "/manifest.json",
-      "headers": { "cache-control": "s-maxage=0" },
-      "dest": "/manifest.json"
-    },
-    {
-      "src": "/favicon.ico",
-      "headers": { "cache-control": "s-maxage=0" },
-      "dest": "/favicon.ico"
-    },
-     {
-      "src": "/logo192.png",
-      "headers": { "cache-control": "s-maxage=31536000,immutable" },
-      "dest": "/logo192.png"
-    },
-    {
-      "src": "/logo512.png",
-      "headers": { "cache-control": "s-maxage=31536000,immutable" },
-      "dest": "/logo512.png"
-    },
-    {
-      "handle": "filesystem"
+      "dest": "backend/server.js"
     },
     {
       "src": "/(.*)",
-      "headers": { "cache-control": "s-maxage=0" },
-      "dest": "/index.html"
+      "dest": "frontend/dist/$1"
     }
   ]
 }
-
