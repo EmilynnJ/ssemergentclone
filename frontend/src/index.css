@@ -4,35 +4,40 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Base styles for the SoulSeer app.
+ * The body uses a gradient background with slow animation to evoke a
+ * mystical, celestial feel. Text uses the Playfair Display font by
+ * default. Additional fonts and custom classes are defined in
+ * `tailwind.config.js`.
+ */
 body {
-    margin: 0;
-    font-family: 'Playfair Display', serif; /* Default to Playfair Display */
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    /* Apply base gradient from Tailwind config - these are example color names */
-    /* Ensure these 'soul-*' colors are defined in tailwind.config.js */
-    @apply bg-gradient-to-br from-soul-purple via-soul-black to-soul-pink text-soul-gray-100;
-    background-size: 200% 200%; /* For gradient animation */
-    animation: gradientShift 15s ease infinite; /* Apply animation */
+  @apply bg-gradient-to-br from-soul-purple via-soul-black to-soul-pink text-soul-gray-100;
+  background-size: 200% 200%;
+  animation: gradientShift 15s ease infinite;
+  margin: 0;
+  font-family: 'Playfair Display', serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Keyframes for body background animation - also defined in tailwind.config.js for utility class use */
 @keyframes gradientShift {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
-/* Utility class for mystical glow on hover - can be applied to buttons or links */
+/* Utility class for glowing hover effects on interactive elements. */
 .mystical-glow-hover:hover {
-  /* Example using soul-pink, adjust color and intensity as needed */
   box-shadow: 0 0 15px #F72585, 0 0 25px #F72585, 0 0 35px #F72585;
-  /* For text glow, text-shadow is better:
-  text-shadow: 0 0 8px #F72585, 0 0 10px #F72585;
-  */
 }
 
 code {
-    font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
-        monospace;
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
 }
