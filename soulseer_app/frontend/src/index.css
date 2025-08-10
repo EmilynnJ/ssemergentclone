@@ -1,0 +1,43 @@
+@import url('https://fonts.googleapis.com/css2?family=Alex+Brush&family=Playfair+Display:wght@400;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Base styles for the SoulSeer app.
+ * The body uses a gradient background with slow animation to evoke a
+ * mystical, celestial feel. Text uses the Playfair Display font by
+ * default. Additional fonts and custom classes are defined in
+ * `tailwind.config.js`.
+ */
+body {
+  @apply bg-gradient-to-br from-soul-purple via-soul-black to-soul-pink text-soul-gray-100;
+  background-size: 200% 200%;
+  animation: gradientShift 15s ease infinite;
+  margin: 0;
+  font-family: 'Playfair Display', serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Utility class for glowing hover effects on interactive elements. */
+.mystical-glow-hover:hover {
+  box-shadow: 0 0 15px #F72585, 0 0 25px #F72585, 0 0 35px #F72585;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
